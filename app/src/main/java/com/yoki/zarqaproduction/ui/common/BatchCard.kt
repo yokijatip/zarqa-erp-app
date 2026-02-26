@@ -26,7 +26,6 @@ import com.yoki.zarqaproduction.data.model.BatchProduksi
 import com.yoki.zarqaproduction.util.daysSince
 import com.yoki.zarqaproduction.util.toFormattedDate
 
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BatchCard(
