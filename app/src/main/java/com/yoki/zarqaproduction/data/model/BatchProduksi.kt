@@ -10,6 +10,7 @@ data class BatchProduksi(
     val kode_hex_warna: String? = null,
     val detail_ukuran: List<DetailUkuran> = emptyList(),
     val total_pcs: Int = 0,
+    val pcs_saat_ini: Int? = null,
     val kain_digunakan: List<KainDigunakan> = emptyList(),
     val status: String = "",
     val dibuat_oleh: String = "",

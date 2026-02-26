@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.yoki.zarqaproduction.data.model.UserProfile
 import com.yoki.zarqaproduction.ui.theme.ZarqaProductionTheme
+import com.yoki.zarqaproduction.util.AppAnalytics
 
 class WorkerActivity : ComponentActivity() {
 
@@ -21,6 +22,7 @@ class WorkerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        AppAnalytics.logScreen(screenName = "worker_home", screenClass = "WorkerActivity")
 
         requestNotificationPermissionIfNeeded()
 
@@ -29,6 +31,7 @@ class WorkerActivity : ComponentActivity() {
             name = intent.getStringExtra("USER_NAME") ?: "",
             role = intent.getStringExtra("USER_ROLE") ?: ""
         )
+        AppAnalytics.logLoginSuccess(role = userProfile.role, uid = userProfile.uid)
 
         setContent {
             ZarqaProductionTheme {

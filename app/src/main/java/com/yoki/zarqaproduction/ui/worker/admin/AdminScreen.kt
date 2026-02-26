@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -34,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -49,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -84,11 +88,24 @@ fun AdminScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(initialPage = selectedTab, pageCount = { 2 })
 
     LaunchedEffect(error) {
         if (error != null) {
             snackbarHostState.showSnackbar(error!!)
             viewModel.clearError()
+        }
+    }
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            if (selectedTab != page) selectedTab = page
+        }
+    }
+
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage != selectedTab) {
+            pagerState.animateScrollToPage(selectedTab)
         }
     }
 
@@ -134,27 +151,32 @@ fun AdminScreen(
                 )
             }
 
-            when (selectedTab) {
-                0 -> StokTab(
-                    stokList = stokList,
-                    isLoading = isLoading,
-                    onRefresh = viewModel::loadStok
-                )
-                1 -> CatatKeluarTab(
-                    stokList = stokList,
-                    isSubmitting = isSubmitting,
-                    currentUid = userProfile.uid,
-                    onSubmit = { barangKeluar, stokIdPerUkuran ->
-                        viewModel.catatKeluar(barangKeluar, stokIdPerUkuran) { success ->
-                            scope.launch {
-                                snackbarHostState.showSnackbar(
-                                    if (success) "Barang keluar berhasil dicatat!"
-                                    else "Gagal menyimpan. Coba lagi."
-                                )
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                when (page) {
+                    0 -> StokTab(
+                        stokList = stokList,
+                        isLoading = isLoading,
+                        onRefresh = viewModel::loadStok
+                    )
+                    1 -> CatatKeluarTab(
+                        stokList = stokList,
+                        isSubmitting = isSubmitting,
+                        currentUid = userProfile.uid,
+                        onSubmit = { barangKeluar, stokIdPerUkuran ->
+                            viewModel.catatKeluar(barangKeluar, stokIdPerUkuran) { success ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        if (success) "Barang keluar berhasil dicatat!"
+                                        else "Gagal menyimpan. Coba lagi."
+                                    )
+                                }
                             }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
     }
@@ -192,7 +214,8 @@ private fun StokTab(
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
-                            elevation = CardDefaults.cardElevation(2.dp)
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            elevation = CardDefaults.cardElevation(1.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
@@ -208,20 +231,52 @@ private fun StokTab(
                                     )
                                     WarnaChip(first.nama_warna, first.kode_hex_warna)
                                 }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "Total tersedia: $totalTersedia pcs",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    items.sortedBy { it.ukuran }.forEach { stok ->
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
                                         Text(
-                                            text = "${stok.ukuran}: ${stok.stok_tersedia}",
-                                            fontSize = 13.sp,
+                                            text = "Total tersedia",
+                                            fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        Text(
+                                            text = "$totalTersedia pcs",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Text(
+                                        text = "${items.size} ukuran",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Rincian ukuran",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items.sortedBy { it.ukuran }.forEach { stok ->
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(999.dp)
+                                        ) {
+                                            Text(
+                                                text = "${stok.ukuran} ${stok.stok_tersedia} pcs",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -263,6 +318,8 @@ private fun CatatKeluarTab(
     }.sortedBy { it.ukuran }
 
     val selectedModelName = selectedModelItems.firstOrNull()?.nama_model ?: ""
+    val totalInput = inputPerUkuran.values.sumOf { it.toIntOrNull() ?: 0 }
+    val totalAvailable = selectedModelItems.sumOf { it.stok_tersedia }
 
     Column(
         modifier = Modifier
@@ -271,82 +328,168 @@ private fun CatatKeluarTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Pilih Model
-        ExposedDropdownMenuBox(
-            expanded = dropdownExpanded,
-            onExpandedChange = { dropdownExpanded = it }
+        // Card: Pilih Model
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(1.dp)
         ) {
-            OutlinedTextField(
-                value = selectedModelName.ifEmpty { "" },
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Pilih Model") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(dropdownExpanded) },
-                modifier = Modifier
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                    .fillMaxWidth(),
-                isError = formError != null && selectedModelId.isEmpty()
-            )
-            ExposedDropdownMenu(
-                expanded = dropdownExpanded,
-                onDismissRequest = { dropdownExpanded = false }
-            ) {
-                modelOptions.forEach { modelId ->
-                    val namaModel = stokList.first { it.model_id == modelId }.nama_model
-                    DropdownMenuItem(
-                        text = { Text(namaModel) },
-                        onClick = {
-                            selectedModelId = modelId
-                            inputPerUkuran = emptyMap()
-                            formError = null
-                            dropdownExpanded = false
-                        }
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Pilih Model",
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ExposedDropdownMenuBox(
+                    expanded = dropdownExpanded,
+                    onExpandedChange = { dropdownExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = selectedModelName.ifEmpty { "" },
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Model") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(dropdownExpanded) },
+                        modifier = Modifier
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                        isError = formError != null && selectedModelId.isEmpty()
                     )
+                    ExposedDropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false }
+                    ) {
+                        modelOptions.forEach { modelId ->
+                            val namaModel = stokList.first { it.model_id == modelId }.nama_model
+                            DropdownMenuItem(
+                                text = { Text(namaModel) },
+                                onClick = {
+                                    selectedModelId = modelId
+                                    inputPerUkuran = emptyMap()
+                                    formError = null
+                                    dropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                if (selectedModelItems.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        WarnaChip(
+                            namaWarna = selectedModelItems.firstOrNull()?.nama_warna,
+                            kodeHexWarna = selectedModelItems.firstOrNull()?.kode_hex_warna
+                        )
+                        Text(
+                            text = "Stok total: $totalAvailable pcs",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        selectedModelItems.forEach { stok ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(999.dp)
+                            ) {
+                                Text(
+                                    text = "${stok.ukuran} ${stok.stok_tersedia} pcs",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        // Input per ukuran (setelah model dipilih)
-        if (selectedModelItems.isNotEmpty()) {
-            Text(
-                text = "Jumlah per Ukuran",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            selectedModelItems.forEach { stok ->
-                OutlinedTextField(
-                    value = inputPerUkuran[stok.ukuran] ?: "",
-                    onValueChange = { value ->
-                        inputPerUkuran = inputPerUkuran + (stok.ukuran to value)
-                        formError = null
-                    },
-                    label = { Text("${stok.ukuran} (stok: ${stok.stok_tersedia})") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = formError != null
+        // Card: Jumlah per Ukuran
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(1.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Jumlah per Ukuran",
+                    style = MaterialTheme.typography.labelLarge
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (selectedModelItems.isEmpty()) {
+                    Text(
+                        text = "Pilih model terlebih dahulu",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    selectedModelItems.chunked(2).forEach { pair ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            pair.forEach { stok ->
+                                OutlinedTextField(
+                                    value = inputPerUkuran[stok.ukuran] ?: "",
+                                    onValueChange = { value ->
+                                        inputPerUkuran = inputPerUkuran + (stok.ukuran to value)
+                                        formError = null
+                                    },
+                                    label = { Text("${stok.ukuran} (stok: ${stok.stok_tersedia})") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                    isError = formError != null
+                                )
+                            }
+                            if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
             }
         }
 
-        // Tujuan
-        OutlinedTextField(
-            value = tujuan,
-            onValueChange = { tujuan = it; formError = null },
-            label = { Text("Tujuan") },
-            singleLine = true,
+        // Card: Tujuan & Keterangan
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            isError = formError != null && tujuan.isBlank()
-        )
-
-        // Keterangan
-        OutlinedTextField(
-            value = keterangan,
-            onValueChange = { keterangan = it },
-            label = { Text("Keterangan (opsional)") },
-            maxLines = 3,
-            modifier = Modifier.fillMaxWidth()
-        )
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(1.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Tujuan & Keterangan",
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = tujuan,
+                    onValueChange = { tujuan = it; formError = null },
+                    label = { Text("Tujuan") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = formError != null && tujuan.isBlank()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = keterangan,
+                    onValueChange = { keterangan = it },
+                    label = { Text("Keterangan (opsional)") },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
 
         if (formError != null) {
             Text(
@@ -354,6 +497,26 @@ private fun CatatKeluarTab(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
+        }
+
+        // Ringkasan singkat
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Total keluar: $totalInput pcs",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (selectedModelItems.isNotEmpty()) {
+                Text(
+                    text = "Sisa: ${(totalAvailable - totalInput).coerceAtLeast(0)} pcs",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         Button(

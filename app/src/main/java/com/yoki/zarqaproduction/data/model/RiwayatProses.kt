@@ -9,6 +9,7 @@ data class RiwayatProses(
     val updated_by_nama: String = "",
     val pcs_berhasil: Int = 0,
     val pcs_reject: Int = 0,
+    val detail_reject_ukuran: List<DetailUkuran> = emptyList(),
     val catatan: String? = null,
     val timestamp: Timestamp? = null
 )

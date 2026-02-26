@@ -4,6 +4,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 import com.yoki.zarqaproduction.data.model.BatchProduksi
+import com.yoki.zarqaproduction.data.model.DetailUkuran
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 
@@ -63,7 +64,7 @@ class BatchRepository {
     }
 
     /**
-     * Selesai proses: update status + tulis riwayat dengan pcs hasil
+     * Selesai proses: update status + tulis riwayat dengan pcs hasil + detail reject per ukuran
      */
     suspend fun finishProcess(
         batchId: String,
@@ -73,24 +74,34 @@ class BatchRepository {
         nama: String,
         pcsBerhasil: Int,
         pcsReject: Int,
+        detailRejectUkuran: List<DetailUkuran>,
         catatan: String?
     ): Result<Unit> {
         return try {
             val ref = firestore.collection("batch_produksi").document(batchId)
+            val latestSnap = ref.get().await()
+            val latestBatch = latestSnap.toObject(BatchProduksi::class.java)
+                ?: return Result.failure(IllegalStateException("Batch tidak ditemukan"))
+            val pcsLimit = latestBatch.pcs_saat_ini ?: latestBatch.total_pcs
+            if (pcsReject > pcsLimit) {
+                return Result.failure(IllegalArgumentException("Reject melebihi jumlah batch"))
+            }
+            val safePcsBerhasil = pcsLimit - pcsReject
             ref.update(mapOf(
-                "status"    to statusBaru,
-                "total_pcs" to pcsBerhasil,
-                "updatedAt" to FieldValue.serverTimestamp()
+                "status"       to statusBaru,
+                "pcs_saat_ini" to safePcsBerhasil,
+                "updatedAt"    to FieldValue.serverTimestamp()
             )).await()
             ref.collection("riwayat_proses").add(mapOf(
-                "status_dari"     to statusDari,
-                "status_ke"       to statusBaru,
-                "updated_by_uid"  to uid,
-                "updated_by_nama" to nama,
-                "pcs_berhasil"    to pcsBerhasil,
-                "pcs_reject"      to pcsReject,
-                "catatan"         to catatan,
-                "timestamp"       to FieldValue.serverTimestamp()
+                "status_dari"       to statusDari,
+                "status_ke"         to statusBaru,
+                "updated_by_uid"    to uid,
+                "updated_by_nama"   to nama,
+                "pcs_berhasil"      to safePcsBerhasil,
+                "pcs_reject"        to pcsReject,
+                "reject_per_ukuran" to detailRejectUkuran.map { mapOf("ukuran" to it.ukuran, "jumlah_pcs" to it.jumlah_pcs) },
+                "catatan"           to catatan,
+                "timestamp"         to FieldValue.serverTimestamp()
             )).await()
             Result.success(Unit)
         } catch (e: Exception) {

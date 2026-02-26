@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.yoki.zarqaproduction.ui.theme.ZarqaProductionTheme
+import com.yoki.zarqaproduction.util.AppAnalytics
 import timber.log.Timber
 
 class AuthActivity : ComponentActivity() {
@@ -23,6 +24,7 @@ class AuthActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        AppAnalytics.logScreen(screenName = "auth_host", screenClass = "AuthActivity")
 
         // Minta izin notifikasi (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

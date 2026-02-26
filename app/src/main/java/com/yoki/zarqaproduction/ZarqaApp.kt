@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import com.yoki.zarqaproduction.BuildConfig
+import com.yoki.zarqaproduction.util.AppAnalytics
 import timber.log.Timber
 
 class ZarqaApp : Application() {
@@ -16,6 +17,7 @@ class ZarqaApp : Application() {
             Timber.plant(Timber.DebugTree())
         }
 
+        AppAnalytics.init(this)
         createNotificationChannels()
     }
 

@@ -3,6 +3,7 @@ package com.yoki.zarqaproduction.ui.worker.steam
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yoki.zarqaproduction.data.model.BatchProduksi
+import com.yoki.zarqaproduction.data.model.DetailUkuran
 import com.yoki.zarqaproduction.data.repository.BatchRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -69,19 +70,22 @@ class SteamViewModel : ViewModel() {
 
     fun finishSteam(
         batchId: String, uid: String, nama: String,
-        pcsBerhasil: Int, pcsReject: Int, catatan: String?,
+        pcsBerhasil: Int, pcsReject: Int,
+        detailRejectUkuran: List<DetailUkuran>,
+        catatan: String?,
         onResult: (Boolean) -> Unit
     ) {
         viewModelScope.launch {
             repository.finishProcess(
-                batchId     = batchId,
-                statusDari  = "STEAM_IN_PROGRESS",
-                statusBaru  = "STEAM_DONE",
-                uid         = uid,
-                nama        = nama,
-                pcsBerhasil = pcsBerhasil,
-                pcsReject   = pcsReject,
-                catatan     = catatan
+                batchId            = batchId,
+                statusDari         = "STEAM_IN_PROGRESS",
+                statusBaru         = "STEAM_DONE",
+                uid                = uid,
+                nama               = nama,
+                pcsBerhasil        = pcsBerhasil,
+                pcsReject          = pcsReject,
+                detailRejectUkuran = detailRejectUkuran,
+                catatan            = catatan
             ).onSuccess { loadBatches(); onResult(true) }
              .onFailure { Timber.e(it, "Gagal selesai steam"); onResult(false) }
         }

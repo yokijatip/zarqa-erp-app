@@ -37,6 +37,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +52,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.*
 import com.google.firebase.auth.auth
 import com.yoki.zarqaproduction.data.model.BatchProduksi
+import com.yoki.zarqaproduction.data.model.DetailUkuran
 import com.yoki.zarqaproduction.data.model.UserProfile
 import com.yoki.zarqaproduction.ui.common.BatchCard
 import com.yoki.zarqaproduction.ui.worker.WorkerActivity
@@ -76,14 +78,21 @@ fun CuttingScreen(
     // BottomSheet "Selesai & Input"
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var batchToFinish by remember { mutableStateOf<BatchProduksi?>(null) }
-    var pcsBerhasil by rememberSaveable { mutableStateOf("") }
-    var pcsReject by rememberSaveable { mutableStateOf("0") }
+    val rejectPerUkuran = remember { mutableStateMapOf<String, String>() }
     var catatan by rememberSaveable { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
 
     // Inisialisasi ViewModel dengan uid user
     LaunchedEffect(userProfile.uid) {
         viewModel.initialize(userProfile.uid)
+    }
+
+    // Inisialisasi reject per ukuran saat batch baru dipilih
+    LaunchedEffect(batchToFinish) {
+        rejectPerUkuran.clear()
+        batchToFinish?.detail_ukuran?.forEach { detail ->
+            rejectPerUkuran[detail.ukuran] = "0"
+        }
     }
 
     // Tampilkan error dari ViewModel sebagai Snackbar
@@ -158,8 +167,6 @@ fun CuttingScreen(
                                 if (isPending) {
                                     batchToStart = batch
                                 } else {
-                                    pcsBerhasil = ""
-                                    pcsReject = "0"
                                     catatan = ""
                                     inputError = null
                                     batchToFinish = batch
@@ -209,51 +216,63 @@ fun CuttingScreen(
             modifier = Modifier.imePadding()
         ) {
             val batch = batchToFinish!!
+            val pcsBatas = batch.pcs_saat_ini ?: batch.total_pcs
+            val needsSync = batch.pcs_saat_ini == null
             Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
                 Text(
                     text = "Laporan Hasil Cutting",
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = "${batch.nama_model} · ${batch.total_pcs} pcs",
+                    text = "${batch.nama_model} · $pcsBatas pcs",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedTextField(
-                        value = pcsBerhasil,
-                        onValueChange = { pcsBerhasil = it; inputError = null },
-                        label = { Text("PCS Berhasil") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        isError = inputError != null,
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = pcsReject,
-                        onValueChange = { pcsReject = it; inputError = null },
-                        label = { Text("PCS Reject") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
+                if (needsSync) {
+                    Text(
+                        text = "Data belum sinkron. Tarik refresh dulu.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
 
-                // Info total
-                val berhasil = pcsBerhasil.toIntOrNull() ?: 0
-                val reject = pcsReject.toIntOrNull() ?: 0
-                val totalInput = berhasil + reject
-                val melebihi = totalInput > batch.total_pcs
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (batch.detail_ukuran.isNotEmpty()) {
+                    Text(
+                        text = "Reject per Ukuran:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    batch.detail_ukuran.chunked(2).forEach { pair ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            pair.forEach { detail ->
+                                OutlinedTextField(
+                                    value = rejectPerUkuran[detail.ukuran] ?: "0",
+                                    onValueChange = { rejectPerUkuran[detail.ukuran] = it },
+                                    label = { Text("Reject ${detail.ukuran}") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                // PCS Berhasil otomatis
+                val totalReject = batch.detail_ukuran.sumOf { rejectPerUkuran[it.ukuran]?.toIntOrNull() ?: 0 }
+                val pcsBerhasil = pcsBatas - totalReject
                 Text(
-                    text = "Total dilaporkan: $totalInput / ${batch.total_pcs} pcs",
+                    text = "PCS Berhasil: $pcsBerhasil  ·  Reject: $totalReject  ·  Total: $pcsBatas pcs",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (melebihi) MaterialTheme.colorScheme.error
+                    color = if (pcsBerhasil < 0) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
                 )
@@ -290,27 +309,28 @@ fun CuttingScreen(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    androidx.compose.material3.Button(onClick = {
-                        val pcs    = pcsBerhasil.toIntOrNull()
-                        val reject = pcsReject.toIntOrNull() ?: 0
+                    androidx.compose.material3.Button(enabled = !needsSync, onClick = {
+                        val totalRej = batch.detail_ukuran.sumOf { rejectPerUkuran[it.ukuran]?.toIntOrNull() ?: 0 }
+                        val pcs = pcsBatas - totalRej
+                        val detailReject = batch.detail_ukuran.mapNotNull { d ->
+                            val qty = rejectPerUkuran[d.ukuran]?.toIntOrNull() ?: 0
+                            if (qty > 0) DetailUkuran(d.ukuran, qty) else null
+                        }
                         when {
-                            pcs == null || pcs <= 0 ->
-                                inputError = "PCS Berhasil harus lebih dari 0"
-                            reject < 0 ->
-                                inputError = "PCS Reject tidak boleh negatif"
-                            pcs + reject > batch.total_pcs ->
-                                inputError = "Total (${ pcs + reject} pcs) melebihi order ${batch.total_pcs} pcs"
+                            pcs < 0 ->
+                                inputError = "Reject ($totalRej) melebihi jumlah batch"
                             else -> {
                                 val batchId = batch.id
                                 scope.launch { bottomSheetState.hide() }
                                 batchToFinish = null
                                 viewModel.finishCutting(
-                                    batchId     = batchId,
-                                    uid         = userProfile.uid,
-                                    nama        = userProfile.name,
-                                    pcsBerhasil = pcs,
-                                    pcsReject   = reject,
-                                    catatan     = catatan.ifBlank { null }
+                                    batchId            = batchId,
+                                    uid                = userProfile.uid,
+                                    nama               = userProfile.name,
+                                    pcsBerhasil        = pcs,
+                                    pcsReject          = totalRej,
+                                    detailRejectUkuran = detailReject,
+                                    catatan            = catatan.ifBlank { null }
                                 ) { success ->
                                     scope.launch {
                                         snackbarHostState.showSnackbar(
@@ -328,3 +348,4 @@ fun CuttingScreen(
         }
     }
 }
+

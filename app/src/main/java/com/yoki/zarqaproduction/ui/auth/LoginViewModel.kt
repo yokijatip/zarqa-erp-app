@@ -6,6 +6,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.yoki.zarqaproduction.data.model.UserProfile
 import com.yoki.zarqaproduction.data.repository.AuthRepository
+import com.yoki.zarqaproduction.util.AppAnalytics
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -45,6 +46,7 @@ class LoginViewModel : ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
+            AppAnalytics.logLoginAttempt(state.email.trim())
             repository.login(state.email.trim(), state.password)
                 .onSuccess { profile ->
                     Timber.i("Login sukses: ${profile.name} (${profile.role})")
@@ -52,6 +54,7 @@ class LoginViewModel : ViewModel() {
                 }
                 .onFailure { e ->
                     Timber.e(e, "Login gagal")
+                    AppAnalytics.logLoginFailure(e::class.simpleName ?: "unknown_error")
                     _uiState.update { it.copy(isLoading = false, error = mapError(e)) }
                 }
         }
